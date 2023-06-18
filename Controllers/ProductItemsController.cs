@@ -1,7 +1,6 @@
 ﻿using CatalogService.Models;
+using CatalogService.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using System.Linq;
 
 namespace CatalogService.Controllers
 {
@@ -9,11 +8,11 @@ namespace CatalogService.Controllers
 	[ApiController]
 	public class ProductItemsController : ControllerBase
 	{
-		private readonly CatalogContext _context;
+		private readonly ICatalogService _catalogService;
 
-		public ProductItemsController(CatalogContext context)
+		public ProductItemsController(ICatalogService catalogService)
 		{
-			_context = context;
+			_catalogService = catalogService;
 		}
 
 		/// <summary>
@@ -26,18 +25,15 @@ namespace CatalogService.Controllers
 		///
 		/// </remarks>
 		[HttpGet]
-		public async Task<ActionResult<IEnumerable<ProductItem>>> GetProductItems(int? page, int? page_size, long? categoryid)
+		public async Task<ActionResult> GetProductItems(int? page, int? page_size, long? categoryid)
 		{
-			if (_context.ProductItems == null)
+			var productItems = await _catalogService.GetProductItemsAsync(page, page_size, categoryid);
+			if (productItems == null)
 			{
-				return NotFound();
+				return StatusCode(StatusCodes.Status204NoContent, "ProductItems not found.");
 			}
-			int rPageSize = (int)(page_size == null ? 30 : page_size);
-			return await _context.ProductItems
-				.Where(x => (categoryid == null) || x.CategoryId == categoryid)
-				.Skip((int)(page == null? 0 : (page - 1) * rPageSize))
-				.Take(rPageSize)
-				.ToListAsync();
+
+			return StatusCode(StatusCodes.Status200OK, productItems);
 		}
 
 		// GET: api/ProductItems/5
@@ -53,63 +49,14 @@ namespace CatalogService.Controllers
 		[HttpGet("{id}")]
 		public async Task<ActionResult<ProductItem>> GetProductItem(long id)
 		{
-			if (_context.ProductItems == null)
-			{
-				return NotFound();
-			}
-			var productItem = await _context.ProductItems.FindAsync(id);
+			ProductItem productItem = await _catalogService.GetProductItemAsync(id);
 
 			if (productItem == null)
 			{
-				return NotFound();
+				return StatusCode(StatusCodes.Status204NoContent, $"No productItem found for id: {id}");
 			}
 
-			return productItem;
-		}
-
-		// PUT: api/ProductItems/5
-		// To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-		/// <summary>
-		/// Update ProductItem.
-		/// </summary>
-		/// <remarks>
-		/// Sample request:
-		///
-		///     PUT api/ProductItems/5
-		///     {
-		///        "CategoryId" = 2,
-		///        "Title" = "new Title",
-		///        "Colour" = "Black"
-		///     }
-		///
-		/// </remarks>
-		[HttpPut("{id}")]
-		public async Task<IActionResult> PutProductItem(long id, ProductItem productItem)
-		{
-			if (id != productItem.Id)
-			{
-				return BadRequest();
-			}
-
-			_context.Entry(productItem).State = EntityState.Modified;
-
-			try
-			{
-				await _context.SaveChangesAsync();
-			}
-			catch (DbUpdateConcurrencyException)
-			{
-				if (!ProductItemExists(id))
-				{
-					return NotFound();
-				}
-				else
-				{
-					throw;
-				}
-			}
-
-			return NoContent();
+			return StatusCode(StatusCodes.Status200OK, productItem);
 		}
 
 		/// <summary>
@@ -126,18 +73,50 @@ namespace CatalogService.Controllers
 		///     }
 		///
 		/// </remarks>
-
 		[HttpPost]
-		public async Task<ActionResult<ProductItem>> PostProductItem(ProductItem productItem)
+		public async Task<ActionResult<ProductItem>> AddProductItem(ProductItem productItem)
 		{
-			if (_context.ProductItems == null)
+			var dbProductItem = await _catalogService.AddProductItemAsync(productItem);
+
+			if (dbProductItem == null)
 			{
-				return Problem("Entity set 'CatalogContext.ProductItems'  is null.");
+				return StatusCode(StatusCodes.Status500InternalServerError, $"{productItem.Title} could not be added.");
 			}
-			_context.ProductItems.Add(productItem);
-			await _context.SaveChangesAsync();
 
 			return CreatedAtAction("GetProductItem", new { id = productItem.Id }, productItem);
+		}
+
+		// To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
+		/// <summary>
+		/// Update ProductItem.
+		/// </summary>
+		/// <remarks>
+		/// Sample request:
+		///
+		///     PUT api/ProductItems/5
+		///     {
+		///        "CategoryId" = 2,
+		///        "Title" = "new Title",
+		///        "Colour" = "Black"
+		///     }
+		///
+		/// </remarks>
+		[HttpPut("{id}")]
+		public async Task<IActionResult> UpdateProductItem(long id, ProductItem productItem)
+		{
+			if (id != productItem.Id)
+			{
+				return BadRequest();
+			}
+
+			var dbProductItem = await _catalogService.UpdateProductItemAsync(productItem);
+
+			if (dbProductItem == null)
+			{
+				return StatusCode(StatusCodes.Status500InternalServerError, $"{productItem.Title} could not be updated.");
+			}
+
+			return NoContent();
 		}
 
 		// DELETE: api/ProductItems/5
@@ -150,29 +129,18 @@ namespace CatalogService.Controllers
 		///     DELETE api/ProductItems/5
 		///
 		/// </remarks>
-
 		[HttpDelete("{id}")]
 		public async Task<IActionResult> DeleteProductItem(long id)
 		{
-			if (_context.ProductItems == null)
+			var productItem = await _catalogService.GetProductItemAsync(id);
+			(bool status, string message) = await _catalogService.DeleteProductItemAsync(productItem);
+
+			if (status == false)
 			{
-				return NotFound();
-			}
-			var productItem = await _context.ProductItems.FindAsync(id);
-			if (productItem == null)
-			{
-				return NotFound();
+				return StatusCode(StatusCodes.Status500InternalServerError, message);
 			}
 
-			_context.ProductItems.Remove(productItem);
-			await _context.SaveChangesAsync();
-
-			return NoContent();
-		}
-
-		private bool ProductItemExists(long id)
-		{
-			return (_context.ProductItems?.Any(e => e.Id == id)).GetValueOrDefault();
+			return StatusCode(StatusCodes.Status200OK, productItem);
 		}
 	}
 }

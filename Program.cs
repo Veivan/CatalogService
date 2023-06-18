@@ -1,4 +1,5 @@
 using CatalogService.Models;
+using CatalogService.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using System.Reflection;
@@ -16,10 +17,12 @@ namespace CatalogService
 
 			builder.Services.AddControllers();
 
-			builder.Services.AddDbContext<CatalogContext>(opt => opt.UseInMemoryDatabase("CatalogService"));
-/*			builder.Services.AddDbContext<CatalogContext>(options =>
-				//options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
-			options.UseSqlServer("Server=(localdb)\\mssqllocaldb;Database=CatalogServ;Trusted_Connection=True;"));*/
+			builder.Services.AddTransient<ICatalogService, CatalogServiceImpl>(); 
+			
+			builder.Services.AddDbContext<CatalogContext>(options =>
+			//options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+			//options.UseSqlServer("Server=(localdb)\\mssqllocaldb;Database=CatalogServ;Trusted_Connection=True;"));
+			options.UseInMemoryDatabase("CatalogService"));
 
 			// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 			builder.Services.AddEndpointsApiExplorer();

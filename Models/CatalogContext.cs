@@ -7,7 +7,7 @@ namespace CatalogService.Models
 		public CatalogContext(DbContextOptions<CatalogContext> options)
 			: base(options)
 		{
-			Database.EnsureDeleted();
+		//	Database.EnsureDeleted();
 			Database.EnsureCreated();
 		}
 
@@ -16,7 +16,7 @@ namespace CatalogService.Models
 
 		protected override void OnModelCreating(ModelBuilder modelBuilder)
 		{
-			/*modelBuilder.Entity<ProductItem>()
+			/* modelBuilder.Entity<ProductItem>()
 				.HasOne(x => x.Category)
 				.WithMany(x => x.ProductItems);
 			//.HasForeignKey("CategoryId"); */

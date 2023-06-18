@@ -1,6 +1,6 @@
 ﻿using CatalogService.Models;
+using CatalogService.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace CatalogService.Controllers
 {
@@ -8,11 +8,11 @@ namespace CatalogService.Controllers
 	[ApiController]
 	public class CategoriesController : ControllerBase
 	{
-		private readonly CatalogContext _context;
+		private readonly ICatalogService _catalogService;
 
-		public CategoriesController(CatalogContext context)
+		public CategoriesController(ICatalogService catalogService)
 		{
-			_context = context;
+			_catalogService = catalogService;
 		}
 
 		/// <summary>
@@ -25,16 +25,18 @@ namespace CatalogService.Controllers
 		///
 		/// </remarks>
 		[HttpGet]
-		public async Task<ActionResult<IEnumerable<Category>>> GetCategories()
+		public async Task<ActionResult> GetCategories()
 		{
-			if (_context.Categories == null)
+			var categories = await _catalogService.GetCategoriesAsync();
+
+			if (categories == null)
 			{
-				return NotFound();
+				return StatusCode(StatusCodes.Status204NoContent, "No categories in database");
 			}
-			return await _context.Categories.ToListAsync();
+
+			return StatusCode(StatusCodes.Status200OK, categories);
 		}
 
-		// GET: api/Categories/5
 		/// <summary>
 		/// Get category by ID.
 		/// </summary>
@@ -47,24 +49,42 @@ namespace CatalogService.Controllers
 		[HttpGet("{id}")]
 		public async Task<ActionResult<Category>> GetCategory(long id)
 		{
-			if (_context.Categories == null)
-			{
-				return NotFound();
-			}
-			//var category = await _context.Categories.FindAsync(id);
+			Category category = await _catalogService.GetCategoryAsync(id);
 
-			var category = await _context.Categories
-				.Include(c => c.ProductItems)
-				.FirstOrDefaultAsync(i => i.Id == id);
 			if (category == null)
 			{
-				return NotFound();
+				return StatusCode(StatusCodes.Status204NoContent, $"No Category found for id: {id}");
 			}
 
-			return category;
+			return StatusCode(StatusCodes.Status200OK, category);
 		}
 
-		// PUT: api/Categories/5
+		// To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
+		/// <summary>
+		/// Add category.
+		/// </summary>
+		/// <remarks>
+		/// Sample request:
+		///
+		///     POST api/Categories
+		///     {
+		///        "name": "Category #1"
+		///     }
+		///
+		/// </remarks>
+		[HttpPost]
+		public async Task<ActionResult<Category>> AddCategory(Category category)
+		{
+			var dbcategory = await _catalogService.AddCategoryAsync(category);
+
+			if (dbcategory == null)
+			{
+				return StatusCode(StatusCodes.Status500InternalServerError, $"{category.Name} could not be added.");
+			}
+
+			return CreatedAtAction("GetCategory", new { id = category.Id }, category);
+		}
+
 		// To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
 		/// <summary>
 		/// Update category.
@@ -86,55 +106,16 @@ namespace CatalogService.Controllers
 				return BadRequest();
 			}
 
-			_context.Entry(category).State = EntityState.Modified;
+			var dbcategory = await _catalogService.UpdateCategoryAsync(category);
 
-			try
+			if (dbcategory == null)
 			{
-				await _context.SaveChangesAsync();
-			}
-			catch (DbUpdateConcurrencyException)
-			{
-				if (!CategoryExists(id))
-				{
-					return NotFound();
-				}
-				else
-				{
-					throw;
-				}
+				return StatusCode(StatusCodes.Status500InternalServerError, $"{category.Name} could not be updated");
 			}
 
 			return NoContent();
 		}
 
-		// POST: api/Categories
-		// To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-		/// <summary>
-		/// Add category.
-		/// </summary>
-		/// <remarks>
-		/// Sample request:
-		///
-		///     POST api/Categories
-		///     {
-		///        "name": "Category #1"
-		///     }
-		///
-		/// </remarks>
-		[HttpPost]
-		public async Task<ActionResult<Category>> PostCategory(Category category)
-		{
-			if (_context.Categories == null)
-			{
-				return Problem("Entity set 'CatalogContext.Categories'  is null.");
-			}
-			_context.Categories.Add(category);
-			await _context.SaveChangesAsync();
-
-			return CreatedAtAction("GetCategory", new { id = category.Id }, category);
-		}
-
-		// DELETE: api/Categories/5
 		/// <summary>
 		/// Delete category.
 		/// </summary>
@@ -147,25 +128,20 @@ namespace CatalogService.Controllers
 		[HttpDelete("{id}")]
 		public async Task<IActionResult> DeleteCategory(long id)
 		{
-			if (_context.Categories == null)
-			{
-				return NotFound();
-			}
-			var category = await _context.Categories.FindAsync(id);
+			var category = await _catalogService.GetCategoryAsync(id);
 			if (category == null)
 			{
-				return NotFound();
+				return StatusCode(StatusCodes.Status204NoContent, $"No Category found for id: {id}");
 			}
 
-			_context.Categories.Remove(category);
-			await _context.SaveChangesAsync();
+			(bool status, string message) = await _catalogService.DeleteCategoryAsync(category);
 
-			return NoContent();
-		}
+			if (status == false)
+			{
+				return StatusCode(StatusCodes.Status500InternalServerError, message);
+			}
 
-		private bool CategoryExists(long id)
-		{
-			return (_context.Categories?.Any(e => e.Id == id)).GetValueOrDefault();
+			return StatusCode(StatusCodes.Status200OK, category);
 		}
 	}
 }
